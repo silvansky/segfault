@@ -5,22 +5,29 @@
 
 #define P_DOUBLE_COUNT   10000
 
+// if set to 1, cat is used instead of curl'ing file to server
+#define USE_STDERR       1
+
 class Crasher
 {
 private:
 	void doSomethingPrivate()
 	{
 		fprintf(stderr, "%s myPrivateInteger == %d\n", "That\'s a private function!", myPrivateInteger);
-		fprintf(stderr, "myPrivateDoubles[101] == %f\n", myPrivateDoubles[101]);
+		fprintf(stderr, "myPrivateDoubles[1] == %f\n", myPrivateDoubles[1]);
+		fprintf(stderr, "myPrivateString == %p\n", myPrivateString);
 		((Crasher*)NULL)->doSomething();
 	}
 private:
+	char *myPrivateString;
 	int myPrivateInteger;
 	double myPrivateDoubles[P_DOUBLE_COUNT];
 public:
 	// c-tor
 	Crasher()
 	{
+		myPrivateString = new char[100];
+		sprintf(myPrivateString, "%s\n", "that\'s my private string!");
 		myPrivateInteger = 100;
 		for (int i = 0; i < P_DOUBLE_COUNT; ++i)
 			myPrivateDoubles[i] = i / 100.0;
@@ -44,8 +51,11 @@ int crash(void *obj)
 void goCrash()
 {
 	const char *str = "Hello, crash!";
+	const char *str2 = "Hello again, crash!";
+	char str3[200];
+	sprintf(str3, "%s\t\t%s\n", str, str2);
 	// fire in my leg!
-	crash(reinterpret_cast<void *>(const_cast<char*>(str)));
+	crash(reinterpret_cast<void *>(str3));
 }
 
 void reportTrouble()
@@ -63,13 +73,14 @@ void reportTrouble()
         fclose(f);
     }
     free(strs);
-    system("curl -A \"MyAppCrashReporter\" --form report_file=@\"crash_report.txt\" http://reports.myserver.com");
-    // for debug
+#if defined(USE_STDERR) && (USE_STDERR > 0)
     system("cat crash_report.txt");
+#else
+    system("curl -A \"MyAppCrashReporter\" --form report_file=@\"crash_report.txt\" http://reports.myserver.com");
+#endif
 }
 
-
-void catch_crash(int signum)
+void catchCrash(int signum)
 {
     reportTrouble();
     signal(signum, SIG_DFL);
@@ -78,8 +89,8 @@ void catch_crash(int signum)
 
 int main(int argc, char *argv[])
 {
-	// prepare
-	signal(SIGSEGV, catch_crash);
+	// prepare to die!
+	signal(SIGSEGV, catchCrash);
 	// crash
 	goCrash();
 	return 0;
